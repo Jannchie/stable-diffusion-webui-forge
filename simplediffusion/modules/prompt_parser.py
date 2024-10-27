@@ -29,7 +29,9 @@ plain: /([^\\\[\]():|]|\\.)+/
 )
 
 
-def get_learned_conditioning_prompt_schedules(prompts, base_steps, hires_steps=None, use_old_scheduling=False):
+def get_learned_conditioning_prompt_schedules(
+    prompts, base_steps, hires_steps=None, use_old_scheduling=False
+):
     """
     >>> g = lambda p: get_learned_conditioning_prompt_schedules([p], 10)[0]
     >>> g("test")
@@ -141,7 +143,9 @@ def get_learned_conditioning_prompt_schedules(prompts, base_steps, hires_steps=N
     return [promptdict[prompt] for prompt in prompts]
 
 
-ScheduledPromptConditioning = namedtuple("ScheduledPromptConditioning", ["end_at_step", "cond"])
+ScheduledPromptConditioning = namedtuple(
+    "ScheduledPromptConditioning", ["end_at_step", "cond"]
+)
 
 
 class SdConditioning(list):
@@ -150,19 +154,29 @@ class SdConditioning(list):
     Can also specify width and height of created image - SDXL needs it.
     """
 
-    def __init__(self, prompts, is_negative_prompt=False, width=None, height=None, copy_from=None):
+    def __init__(
+        self, prompts, is_negative_prompt=False, width=None, height=None, copy_from=None
+    ):
         super().__init__()
         self.extend(prompts)
 
         if copy_from is None:
             copy_from = prompts
 
-        self.is_negative_prompt = is_negative_prompt or getattr(copy_from, "is_negative_prompt", False)
+        self.is_negative_prompt = is_negative_prompt or getattr(
+            copy_from, "is_negative_prompt", False
+        )
         self.width = width or getattr(copy_from, "width", None)
         self.height = height or getattr(copy_from, "height", None)
 
 
-def get_learned_conditioning(model, prompts: SdConditioning | list[str], steps, hires_steps=None, use_old_scheduling=False):
+def get_learned_conditioning(
+    model,
+    prompts: SdConditioning | list[str],
+    steps,
+    hires_steps=None,
+    use_old_scheduling=False,
+):
     """converts a list of prompts into a list of prompt schedules - each schedule is a list of ScheduledPromptConditioning, specifying the comdition (cond),
     and the sampling step at which this condition is to be replaced by the next one.
 
@@ -182,7 +196,9 @@ def get_learned_conditioning(model, prompts: SdConditioning | list[str], steps, 
     """
     res = []
 
-    prompt_schedules = get_learned_conditioning_prompt_schedules(prompts, steps, hires_steps, use_old_scheduling)
+    prompt_schedules = get_learned_conditioning_prompt_schedules(
+        prompts, steps, hires_steps, use_old_scheduling
+    )
     cache = {}
 
     for prompt, prompt_schedule in zip(prompts, prompt_schedules):
@@ -253,11 +269,15 @@ class ComposableScheduledPromptConditioning:
 
 class MulticondLearnedConditioning:
     def __init__(self, shape, batch):
-        self.shape: tuple = shape  # the shape field is needed to send this object to DDIM/PLMS
+        self.shape: tuple = (
+            shape  # the shape field is needed to send this object to DDIM/PLMS
+        )
         self.batch: list[list[ComposableScheduledPromptConditioning]] = batch
 
 
-def get_multicond_learned_conditioning(model, prompts, steps, hires_steps=None, use_old_scheduling=False) -> MulticondLearnedConditioning:
+def get_multicond_learned_conditioning(
+    model, prompts, steps, hires_steps=None, use_old_scheduling=False
+) -> MulticondLearnedConditioning:
     """same as get_learned_conditioning, but returns a list of ScheduledPromptConditioning along with the weight objects for each prompt.
     For each prompt, the list is obtained by splitting the prompt using the AND separator.
 
@@ -266,9 +286,17 @@ def get_multicond_learned_conditioning(model, prompts, steps, hires_steps=None, 
 
     res_indexes, prompt_flat_list, prompt_indexes = get_multicond_prompt_list(prompts)
 
-    learned_conditioning = get_learned_conditioning(model, prompt_flat_list, steps, hires_steps, use_old_scheduling)
+    learned_conditioning = get_learned_conditioning(
+        model, prompt_flat_list, steps, hires_steps, use_old_scheduling
+    )
 
-    res = [[ComposableScheduledPromptConditioning(learned_conditioning[i], weight) for i, weight in indexes] for indexes in res_indexes]
+    res = [
+        [
+            ComposableScheduledPromptConditioning(learned_conditioning[i], weight)
+            for i, weight in indexes
+        ]
+        for indexes in res_indexes
+    ]
     return MulticondLearnedConditioning(shape=(len(prompts),), batch=res)
 
 
@@ -288,7 +316,9 @@ class DictWithShape(dict):
         return self
 
     def advanced_indexing(self, item):
-        result = {k: self[k][item] for k in self.keys() if isinstance(self[k], torch.Tensor)}
+        result = {
+            k: self[k][item] for k in self.keys() if isinstance(self[k], torch.Tensor)
+        }
         return DictWithShape(result)
 
 
@@ -298,14 +328,25 @@ def reconstruct_cond_batch(c: list[list[ScheduledPromptConditioning]], current_s
 
     if is_dict:
         dict_cond = param
-        res = {k: torch.zeros((len(c),) + param.shape, device=param.device, dtype=param.dtype) for k, param in dict_cond.items()}
+        res = {
+            k: torch.zeros(
+                (len(c),) + param.shape, device=param.device, dtype=param.dtype
+            )
+            for k, param in dict_cond.items()
+        }
         res = DictWithShape(res)
     else:
-        res = torch.zeros((len(c),) + param.shape, device=param.device, dtype=param.dtype)
+        res = torch.zeros(
+            (len(c),) + param.shape, device=param.device, dtype=param.dtype
+        )
 
     for i, cond_schedule in enumerate(c):
         target_index = next(
-            (current for current, entry in enumerate(cond_schedule) if current_step <= entry.end_at_step),
+            (
+                current
+                for current, entry in enumerate(cond_schedule)
+                if current_step <= entry.end_at_step
+            ),
             0,
         )
         if is_dict:
@@ -324,7 +365,9 @@ def stack_conds(tensors):
     for i in range(len(tensors)):
         if tensors[i].shape[0] != token_count:
             last_vector = tensors[i][-1:]
-            last_vector_repeated = last_vector.repeat([token_count - tensors[i].shape[0], 1])
+            last_vector_repeated = last_vector.repeat(
+                [token_count - tensors[i].shape[0], 1]
+            )
             tensors[i] = torch.vstack([tensors[i], last_vector_repeated])
 
     return torch.stack(tensors)
@@ -341,7 +384,11 @@ def reconstruct_multicond_batch(c: MulticondLearnedConditioning, current_step):
 
         for composable_prompt in composable_prompts:
             target_index = next(
-                (current for current, entry in enumerate(composable_prompt.schedules) if current_step <= entry.end_at_step),
+                (
+                    current
+                    for current, entry in enumerate(composable_prompt.schedules)
+                    if current_step <= entry.end_at_step
+                ),
                 0,
             )
             conds_for_batch.append((len(tensors), composable_prompt.weight))

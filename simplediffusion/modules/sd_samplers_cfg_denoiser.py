@@ -1,5 +1,5 @@
 import torch
-from modules import prompt_parser
+from simplediffusion.modules import prompt_parser
 from simplediffusion.modules.sd_samplers_common import store_latent
 
 import modules.shared as shared
@@ -103,7 +103,7 @@ class CFGDenoiser(torch.nn.Module):
         self.sampler.sampler_extra_args["uncond"] = uc
 
     def pad_cond_uncond(self, cond, uncond):
-        empty = shared.sd_model.cond_stage_model_empty_prompt
+        empty = self.sd_model.cond_stage_model_empty_prompt
         num_repeats = (cond.shape[1] - uncond.shape[1]) // empty.shape[1]
 
         if num_repeats < 0:

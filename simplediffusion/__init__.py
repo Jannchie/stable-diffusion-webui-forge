@@ -12,24 +12,34 @@ import PIL.Image
 import simplediffusion.modules.sd_models
 from simplediffusion.patchers.controlnet import ControlNetHook
 from simplediffusion.patchers.controlnet.lib_controlnet.external_code import (
-    ControlNetUnit, ResizeMode)
-from simplediffusion.patchers.controlnet.lib_controlnet.utils import \
-    crop_and_resize_image
-from simplediffusion.patchers.controlnet.supported_controlnet import \
-    ControlNetPatcher
+    ControlNetUnit,
+    ResizeMode,
+)
+from simplediffusion.patchers.controlnet.lib_controlnet.utils import (
+    crop_and_resize_image,
+)
+from simplediffusion.patchers.controlnet.supported_controlnet import ControlNetPatcher
 from simplediffusion.patchers.reference_only import ReferenceOnlyHook
-from simplediffusion.preprocessors.legacy_preprocessors.legacy_preprocessors import \
-    LegacyPreprocessor
-from simplediffusion.preprocessors.legacy_preprocessors.preprocessor_compiled import \
-    legacy_preprocessors
-from simplediffusion.processing import (StableDiffusionProcessingImg2Img,
-                                        StableDiffusionProcessingTxt2Img,
-                                        process_images_inner)
+from simplediffusion.preprocessors.legacy_preprocessors.legacy_preprocessors import (
+    LegacyPreprocessor,
+)
+from simplediffusion.preprocessors.legacy_preprocessors.preprocessor_compiled import (
+    legacy_preprocessors,
+)
+from simplediffusion.processing import (
+    StableDiffusionProcessingImg2Img,
+    StableDiffusionProcessingTxt2Img,
+    process_images,
+)
 
 openpose_preprocessor = LegacyPreprocessor(legacy_preprocessors["openpose"])
 
-from simplediffusion.utils import (Timer, calculate_image_dimensions,
-                                   load_torch_file, numpy_to_pytorch)
+from simplediffusion.utils import (
+    Timer,
+    calculate_image_dimensions,
+    load_torch_file,
+    numpy_to_pytorch,
+)
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -41,14 +51,18 @@ def main():
         img2 = PIL.Image.open(R"C:\Users\Jannchie\OneDrive\图片\1.jpg")
         pose_img = PIL.Image.open(R"C:\Users\Jannchie\OneDrive\图片\1.jpg")
         refenence_only_hook = ReferenceOnlyHook(use_attn=True)
-        openpose_controlnet_path = Path(R"E:\stable-diffusion-webui-forge\models\ControlNet\OpenPoseXL2.safetensors")
+        openpose_controlnet_path = Path(
+            R"E:\stable-diffusion-webui-forge\models\ControlNet\OpenPoseXL2.safetensors"
+        )
         resize_mode = ResizeMode.RESIZE
 
         image_np = np.array(pose_img)
 
         state_dict = load_torch_file(openpose_controlnet_path, safe_load=True)
         state_dict_copy = dict(state_dict.items())
-        openpose_model = ControlNetPatcher.try_build_from_state_dict(state_dict_copy, openpose_controlnet_path)
+        openpose_model = ControlNetPatcher.try_build_from_state_dict(
+            state_dict_copy, openpose_controlnet_path
+        )
         controlnet_hook = ControlNetHook(
             [
                 ControlNetUnit(
@@ -60,7 +74,6 @@ def main():
                         "mask": np.zeros_like(image_np),
                     },
                     weight=1.6,
-
                 )
             ]
         )
@@ -73,7 +86,7 @@ def main():
                 str(checkpoint_path)
             )
             sd_model = simplediffusion.modules.sd_models.load_model(checkpoint_info)
-            shared.sd_model = sd_model
+            # shared.sd_model = sd_model
         with Timer("Process"):
             p = StableDiffusionProcessingTxt2Img(
                 sd_model=sd_model,
@@ -82,6 +95,8 @@ def main():
                 seed=47,
                 outpath_samples="./outputs",
                 # sampler_name="DPM++ 2M SDE",
+                sampler_name="DPM++ 2M",
+                scheduler="Automatic",
                 # init_images=[img],
                 hooks=hooks,
                 width=832,
@@ -90,7 +105,9 @@ def main():
                 steps=20,
             )
             h, w, hr_y, hr_x, has_high_res_fix = calculate_image_dimensions(p)
-            logging.info(f"Image dimensions: {h}x{w}, HR: {hr_y}x{hr_x}, high_res_fix: {has_high_res_fix}")
+            logging.info(
+                f"Image dimensions: {h}x{w}, HR: {hr_y}x{hr_x}, high_res_fix: {has_high_res_fix}"
+            )
 
             ref_image = img2
 
@@ -100,7 +117,7 @@ def main():
 
             refenence_only_hook.cond = ref_cond
 
-            res = process_images_inner(p)
+            res = process_images(p)
             res.images[0].save("outputs/result3.png")
 
         # p = StableDiffusionProcessingTxt2Img()

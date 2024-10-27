@@ -5,6 +5,9 @@ from modules.processing import StableDiffusionProcessing
 
 class Hook:
 
+    def before_hr(self):
+        pass
+
     def apply_on_before_component_callback(self):
         pass
 

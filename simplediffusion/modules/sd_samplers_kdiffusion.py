@@ -127,13 +127,17 @@ k_diffusion_scheduler = {x.name: x.function for x in sd_schedulers.schedulers}
 
 
 class CFGDenoiserKDiffusion(sd_samplers_cfg_denoiser.CFGDenoiser):
+    def __init__(self, sampler, sd_model):
+        super().__init__(sampler)
+        self.sd_model = sd_model
+
     @property
     def inner_model(self):
         if self.model_wrap is None:
             self.model_wrap = k_diffusion.external.ForgeScheduleLinker(
-                shared.sd_model.forge_objects.unet.model.predictor
+                self.sd_model.forge_objects.unet.model.predictor
             )
-            self.model_wrap.inner_model = shared.sd_model
+            self.model_wrap.inner_model = self.sd_model
 
         return self.model_wrap
 
@@ -151,7 +155,7 @@ class KDiffusionSampler(sd_samplers_common.Sampler):
             else getattr(k_diffusion.sampling, self.funcname)
         )
 
-        self.model_wrap_cfg = CFGDenoiserKDiffusion(self)
+        self.model_wrap_cfg = CFGDenoiserKDiffusion(self, sd_model)
         self.model_wrap = self.model_wrap_cfg.inner_model
 
     def get_sigmas(self, p, steps):
@@ -199,7 +203,7 @@ class KDiffusionSampler(sd_samplers_common.Sampler):
                 sigmas_kwargs["sigma_min"] = opts.sigma_min
                 p.extra_generation_params["Schedule min sigma"] = opts.sigma_min
 
-            if opts.sigma_max != 0 and opts.sigma_max != m_sigma_max:
+            if opts.sigma_max not in [0, m_sigma_max]:
                 sigmas_kwargs["sigma_max"] = opts.sigma_max
                 p.extra_generation_params["Schedule max sigma"] = opts.sigma_max
 

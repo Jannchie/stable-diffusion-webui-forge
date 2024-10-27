@@ -25,11 +25,14 @@ import modules.paths as paths
 import modules.sd_vae as sd_vae
 import modules.shared as shared
 import modules.styles
-import simplediffusion.modules.sd_models as sd_models
-import simplediffusion.prompt_parser as prompt_parser
+from simplediffusion.modules import (
+    extra_networks,
+    sd_models,
+    prompt_parser,
+    sd_samplers,
+)
 from modules import (
     devices,
-    extra_networks,
     infotext_utils,
     masking,
     rng,
@@ -45,7 +48,6 @@ from simplediffusion.modules.sd_samplers_common import (
     images_tensor_to_samples,
     is_sampler_using_eta_noise_seed_delta,
 )
-from simplediffusion.modules import sd_samplers
 
 console = rich.get_console()
 opt_C = 4
@@ -253,7 +255,7 @@ class StableDiffusionProcessing:
 
         self.extra_generation_params = self.extra_generation_params or {}
         self.override_settings = self.override_settings or {}
-        self.script_args = self.script_args or {}
+        # self.script_args = self.script_args or {}
 
         self.refiner_checkpoint_info = None
 
@@ -268,43 +270,6 @@ class StableDiffusionProcessing:
 
         self.extra_result_images = []
         self.modified_noise = None
-
-    @property
-    def sd_model(self):
-        return shared.sd_model
-
-    @sd_model.setter
-    def sd_model(self, value):
-        pass
-
-    @property
-    def scripts(self):
-        return self.scripts_value
-
-    @scripts.setter
-    def scripts(self, value):
-        self.scripts_value = value
-        if (
-            self.scripts_value
-            and self.script_args_value
-            and not self.scripts_setup_complete
-        ):
-            self.setup_scripts()
-
-    @property
-    def script_args(self):
-        return self.script_args_value
-
-    @script_args.setter
-    def script_args(self, value):
-        self.script_args_value = value
-
-        if (
-            self.scripts_value
-            and self.script_args_value
-            and not self.scripts_setup_complete
-        ):
-            self.setup_scripts()
 
     def setup_scripts(self):
         self.scripts_setup_complete = True
@@ -325,7 +290,7 @@ class StableDiffusionProcessing:
         raise NotImplementedError("NotImplementedError: depth2img_image_conditioning")
 
     def edit_image_conditioning(self, source_image):
-        return shared.sd_model.encode_first_stage(source_image).mode()
+        return self.sd_model.encode_first_stage(source_image).mode()
 
     def unclip_image_conditioning(self, source_image):
         c_adm = self.sd_model.embedder(source_image)
@@ -506,7 +471,7 @@ class StableDiffusionProcessing:
             hires_steps,
             use_old_scheduling,
             opts.CLIP_stop_at_last_layers,
-            shared.sd_model.sd_checkpoint_info,
+            self.sd_model.sd_checkpoint_info,
             extra_network_data,
             opts.sdxl_crop_left,
             opts.sdxl_crop_top,
@@ -534,16 +499,13 @@ class StableDiffusionProcessing:
         )
         self.step_multiplier = total_steps // self.steps
         self.firstpass_steps = total_steps
-        print(prompts)
-        print(negative_prompts)
-        print(self.extra_network_data)
 
         with devices.autocast():
             self.uc = prompt_parser.get_learned_conditioning(
-                shared.sd_model, negative_prompts, total_steps, hires_steps=None
+                self.sd_model, negative_prompts, total_steps, hires_steps=None
             )
             self.c = prompt_parser.get_multicond_learned_conditioning(
-                shared.sd_model, prompts, total_steps, hires_steps=None
+                self.sd_model, prompts, total_steps, hires_steps=None
             )
 
     def get_conds(self):
@@ -860,48 +822,6 @@ def create_infotext(
 
 
 def process_images(p: StableDiffusionProcessing) -> Processed:
-
-    stored_opts = {
-        k: opts.data[k] if k in opts.data else opts.get_default(k)
-        for k in p.override_settings.keys()
-        if k in opts.data
-    }
-
-    try:
-        # if no checkpoint override or the override checkpoint can't be found, remove override entry and load opts checkpoint
-        # and if after running refiner, the refiner model is not unloaded - webui swaps back to main model here, if model over is present it will be reloaded afterwards
-        if (
-            sd_models.checkpoint_aliases.get(
-                p.override_settings.get("sd_model_checkpoint")
-            )
-            is None
-        ):
-            p.override_settings.pop("sd_model_checkpoint", None)
-            sd_models.reload_model_weights()
-
-        for k, v in p.override_settings.items():
-            opts.set(k, v, is_api=True, run_callbacks=False)
-
-            if k == "sd_model_checkpoint":
-                sd_models.reload_model_weights()
-            elif k == "sd_vae":
-                sd_vae.reload_vae_weights()
-
-        res = process_images_inner(p)
-
-    finally:
-        # restore opts to original state
-        if p.override_settings_restore_afterwards:
-            for k, v in stored_opts.items():
-                setattr(opts, k, v)
-
-                if k == "sd_vae":
-                    sd_vae.reload_vae_weights()
-
-    return res
-
-
-def process_images_inner(p: StableDiffusionProcessing) -> Processed:
     """this is the main loop that both txt2img and img2img use; it calls func_init once inside all the scopes and func_sample once per batch"""
     sd_samplers.fix_p_invalid_sampler_and_scheduler(p)
 
@@ -972,9 +892,13 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
         for n in range(p.n_iter):
             p.iteration = n
 
-            sd_models.reload_model_weights(
-                p.sd_model.sd_checkpoint_info
-            )  # model can be changed for example by refiner
+            # sd_models.reload_model_weights(
+            #     p.sd_model.sd_checkpoint_info
+            # )  # model can be changed for example by refiner
+
+            # if not getattr(p, 'txt2img_upscale', False) or p.hr_checkpoint_name is None:
+            #     # hiresfix quickbutton may not need reload of firstpass model
+            #     sd_models.forge_model_reload()  # model can be changed for example by refiner, hiresfix
 
             p.sd_model.forge_objects = p.sd_model.forge_objects_original.shallow_copy()
             p.prompts = p.all_prompts[n * p.batch_size : (n + 1) * p.batch_size]
@@ -993,8 +917,8 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
                 seed_resize_from_w=p.seed_resize_from_w,
             )
 
-            if p.scripts is not None:
-                p.scripts.before_process_batch(
+            for hook in p.hooks:
+                hook.before_process_batch(
                     p,
                     batch_number=n,
                     prompts=p.prompts,
@@ -1112,9 +1036,9 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
                     ((1 - p.sd_model.alphas_cumprod) / p.sd_model.alphas_cumprod) ** 0.5
                 )
 
-            if p.scripts is not None:
+            for hook in p.hooks:
                 ps = scripts.PostSampleArgs(samples_ddim)
-                p.scripts.post_sample(p, ps)
+                hook.post_sample(p, ps)
                 samples_ddim = ps.samples
 
             if getattr(samples_ddim, "already_decoded", False):
@@ -1138,8 +1062,8 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
 
             # shared.state.nextjob()
 
-            if p.scripts is not None:
-                p.scripts.postprocess_batch(p, x_samples_ddim, batch_number=n)
+            for hook in p.hooks:
+                hook.postprocess_batch(p, x_samples_ddim, batch_number=n)
 
                 p.prompts = p.all_prompts[n * p.batch_size : (n + 1) * p.batch_size]
                 p.negative_prompts = p.all_negative_prompts[
@@ -1191,9 +1115,11 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
 
                 image = Image.fromarray(x_sample)
 
-                if p.scripts is not None:
-                    pp = scripts.PostprocessImageArgs(image)
-                    p.scripts.postprocess_image(p, pp)
+                for hook in p.hooks:
+                    pp = scripts.PostprocessImageArgs(
+                        image, i + p.iteration * p.batch_size
+                    )
+                    hook.postprocess_image(p, pp)
                     image = pp.image
 
                 mask_for_overlay = getattr(p, "mask_for_overlay", None)
@@ -1207,11 +1133,11 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
                 else:
                     overlay_image = None
 
-                if p.scripts is not None:
+                for hook in p.hooks:
                     ppmo = scripts.PostProcessMaskOverlayArgs(
                         i, mask_for_overlay, overlay_image
                     )
-                    p.scripts.postprocess_maskoverlay(p, ppmo)
+                    hook.postprocess_maskoverlay(p, ppmo)
                     mask_for_overlay, overlay_image = (
                         ppmo.mask_for_overlay,
                         ppmo.overlay_image,
@@ -1243,9 +1169,11 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
                     image, p.paste_to, overlay_image
                 )
 
-                if p.scripts is not None:
-                    pp = scripts.PostprocessImageArgs(image)
-                    p.scripts.postprocess_image_after_composite(p, pp)
+                for hook in p.hooks:
+                    pp = scripts.PostprocessImageArgs(
+                        image, i + p.iteration * p.batch_size
+                    )
+                    hook.postprocess_image_after_composite(p, pp)
                     image = pp.image
 
                 if save_samples:
@@ -1364,8 +1292,8 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
         extra_images_list=p.extra_result_images,
     )
 
-    if p.scripts is not None:
-        p.scripts.postprocess(p, res)
+    for hook in p.hooks:
+        hook.postprocess(p, res)
 
     return res
 
@@ -1773,8 +1701,8 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
         with devices.autocast():
             self.calculate_hr_conds()
 
-        if self.scripts is not None:
-            self.scripts.before_hr(self)
+        for hook in self.hooks:
+            hook.before_hr(self)
 
         self.sd_model.forge_objects = (
             self.sd_model.forge_objects_after_applying_lora.shallow_copy()
@@ -1895,7 +1823,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
                 self.calculate_hr_conds()
 
             elif (
-                shared.sd_model.sd_checkpoint_info == sd_models.select_checkpoint()
+                self.sd_model.sd_checkpoint_info == sd_models.select_checkpoint()
             ):  # if in lowvram mode, we need to calculate conds right away, before the cond NN is unloaded
                 with devices.autocast():
                     extra_networks.activate(self, self.hr_extra_network_data)
@@ -1982,7 +1910,7 @@ class StableDiffusionProcessingImg2Img(StableDiffusionProcessing):
         self.extra_generation_params["Denoising strength"] = self.denoising_strength
 
         self.image_cfg_scale: float = (
-            self.image_cfg_scale if shared.sd_model.cond_stage_key == "edit" else None
+            self.image_cfg_scale if self.sd_model.cond_stage_key == "edit" else None
         )
 
         self.sampler = sd_samplers.create_sampler(self.sampler_name, self.sd_model)
