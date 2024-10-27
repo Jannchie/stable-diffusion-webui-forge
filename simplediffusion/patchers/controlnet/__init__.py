@@ -8,11 +8,7 @@ import torch
 from PIL import Image
 
 from modules import masking, shared
-from modules.processing import (
-    StableDiffusionProcessing,
-    StableDiffusionProcessingImg2Img,
-    StableDiffusionProcessingTxt2Img,
-)
+
 from modules_forge.supported_controlnet import ControlModelPatcher
 from simplediffusion.hook import Hook
 
@@ -30,6 +26,14 @@ from .lib_controlnet.utils import (
     prepare_mask,
     set_numpy_seed,
 )
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from simplediffusion.processing import (
+        StableDiffusionProcessing,
+        StableDiffusionProcessingImg2Img,
+        StableDiffusionProcessingTxt2Img,
+    )
 
 
 def HWC3(x):
@@ -96,7 +100,7 @@ class ControlNetHook(Hook):
 
     def try_crop_image_with_a1111_mask(
         self,
-        p: StableDiffusionProcessing,
+        p: "StableDiffusionProcessing",
         preprocessor,
         input_image: np.ndarray,
         resize_mode: external_code.ResizeMode,
@@ -143,7 +147,7 @@ class ControlNetHook(Hook):
 
     def get_input_data(
         self,
-        p: StableDiffusionProcessing,
+        p: "StableDiffusionProcessing",
         unit: ControlNetUnit,
         h: int,
         w: int,
@@ -274,13 +278,13 @@ class ControlNetHook(Hook):
 
     @staticmethod
     def get_target_dimensions(
-        p: StableDiffusionProcessing,
+        p: "StableDiffusionProcessing",
     ) -> Tuple[int, int, int, int]:
         """Returns (h, w, hr_h, hr_w)."""
         h = align_dim_latent(p.height)
         w = align_dim_latent(p.width)
 
-        if high_res_fix := isinstance(p, StableDiffusionProcessingTxt2Img) and getattr(
+        if isinstance(p, StableDiffusionProcessingTxt2Img) and getattr(
             p, "enable_hr", False
         ):
             if p.hr_resize_x == 0 and p.hr_resize_y == 0:
@@ -299,7 +303,7 @@ class ControlNetHook(Hook):
     @torch.no_grad()
     def process_unit(
         self,
-        p: StableDiffusionProcessing,
+        p: "StableDiffusionProcessing",
         unit: ControlNetUnit,
         params: ControlNetCachedParameters,
         *args,
@@ -480,7 +484,7 @@ class ControlNetHook(Hook):
     @torch.no_grad()
     def process_unit_before_every_sampling(
         self,
-        p: StableDiffusionProcessing,
+        p: "StableDiffusionProcessing",
         unit: ControlNetUnit,
         params: ControlNetCachedParameters,
         *args,
@@ -617,7 +621,7 @@ class ControlNetHook(Hook):
     @torch.no_grad()
     def process_unit_after_every_sampling(
         self,
-        p: StableDiffusionProcessing,
+        p: "StableDiffusionProcessing",
         unit: ControlNetUnit,
         params: ControlNetCachedParameters,
         *args,
@@ -629,7 +633,7 @@ class ControlNetHook(Hook):
         return
 
     @torch.no_grad()
-    def process(self, p: StableDiffusionProcessing):
+    def process(self, p: "StableDiffusionProcessing"):
         self.current_params = {}
         enabled_units = self.get_enabled_units()
         Infotext.write_infotext(enabled_units, p)
@@ -642,7 +646,9 @@ class ControlNetHook(Hook):
         return
 
     @torch.no_grad()
-    def process_before_every_sampling(self, p, *args, **kwargs):
+    def process_before_every_sampling(
+        self, p: "StableDiffusionProcessing", *args, **kwargs
+    ):
         print("Processing before every sampling")
         for i, unit in enumerate(self.get_enabled_units()):
             self.process_unit_before_every_sampling(
@@ -659,7 +665,7 @@ class ControlNetHook(Hook):
             )
         return
 
-    def postprocess(self, p, processed, *args):
+    def postprocess(self, p: "StableDiffusionProcessing", processed, *args):
         self.current_params = {}
         return
 
@@ -688,3 +694,9 @@ class ControlNetHook(Hook):
 # script_callbacks.on_after_component(ControlNetUiGroup.on_after_component)
 # script_callbacks.on_before_reload(ControlNetUiGroup.reset)
 # script_callbacks.on_app_started(controlnet_api)
+
+from simplediffusion.processing import (
+    StableDiffusionProcessing,
+    StableDiffusionProcessingImg2Img,
+    StableDiffusionProcessingTxt2Img,
+)

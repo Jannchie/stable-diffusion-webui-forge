@@ -12,11 +12,11 @@ from backend.patcher.controlnet import (
     load_t2i_adapter,
 )
 from modules_forge.shared import add_supported_control_model
-from repositories.huggingface_guess.huggingface_guess.detection import (
+from huggingface_guess.detection import (
     model_config_from_unet,
     unet_config_from_diffusers_unet,
 )
-from repositories.huggingface_guess.huggingface_guess.utils import unet_to_diffusers
+from huggingface_guess.utils import unet_to_diffusers
 
 
 class ControlModelPatcher:
