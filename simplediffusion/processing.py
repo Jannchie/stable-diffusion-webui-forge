@@ -360,7 +360,7 @@ class StableDiffusionProcessing:
     def img2img_image_conditioning(
         self, source_image, latent_image, image_mask=None, round_image_mask=True
     ):
-        source_image = devices.cond_cast_float(source_image)
+        # source_image = devices.cond_cast_float(source_image)
 
         # HACK: Using introspection as the Depth2Image model doesn't appear to uniquely
         # identify itself with a field common to all models. The conditioning_key is also hybrid.
