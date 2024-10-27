@@ -367,26 +367,21 @@ class StableDiffusionProcessing:
         # if isinstance(self.sd_model, LatentDepth2ImageDiffusion):
         #     return self.depth2img_image_conditioning(source_image)
 
-        if self.sd_model.cond_stage_key == "edit":
-            return self.edit_image_conditioning(source_image)
+        # if self.sd_model.cond_stage_key == "edit":
+        #     return self.edit_image_conditioning(source_image)
 
-        if self.sampler.conditioning_key in {"hybrid", "concat"}:
-            return self.inpainting_image_conditioning(
-                source_image,
-                latent_image,
-                image_mask=image_mask,
-                round_image_mask=round_image_mask,
-            )
+        if self.sd_model.is_inpaint:
+            return self.inpainting_image_conditioning(source_image, latent_image, image_mask=image_mask, round_image_mask=round_image_mask)
 
-        if self.sampler.conditioning_key == "crossattn-adm":
-            return self.unclip_image_conditioning(source_image)
+        # if self.sampler.conditioning_key == "crossattn-adm":
+        #     return self.unclip_image_conditioning(source_image)
 
-        sd = self.sampler.model_wrap.inner_model.model.state_dict()
-        diffusion_model_input = sd.get("diffusion_model.input_blocks.0.0.weight", None)
-        if diffusion_model_input is not None and diffusion_model_input.shape[1] == 9:
-            return self.inpainting_image_conditioning(
-                source_image, latent_image, image_mask=image_mask
-            )
+        # sd = self.sampler.model_wrap.inner_model.model.state_dict()
+        # diffusion_model_input = sd.get("diffusion_model.input_blocks.0.0.weight", None)
+        # if diffusion_model_input is not None and diffusion_model_input.shape[1] == 9:
+        #     return self.inpainting_image_conditioning(
+        #         source_image, latent_image, image_mask=image_mask
+        #     )
 
         # Dummy zero conditioning if we're not using inpainting or depth model.
         return latent_image.new_zeros(latent_image.shape[0], 5, 1, 1)
@@ -1909,9 +1904,7 @@ class StableDiffusionProcessingImg2Img(StableDiffusionProcessing):
     def init(self):  # sourcery skip: low-code-quality
         self.extra_generation_params["Denoising strength"] = self.denoising_strength
 
-        self.image_cfg_scale: float = (
-            self.image_cfg_scale if self.sd_model.cond_stage_key == "edit" else None
-        )
+        self.image_cfg_scale: float = None
 
         self.sampler = sd_samplers.create_sampler(self.sampler_name, self.sd_model)
         crop_region = None

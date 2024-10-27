@@ -12,5 +12,10 @@ class BetterReprHighlighter(ReprHighlighter):
 
 
 def initialize():
-    FORMAT = "%(name)s: %(message)s"
+    FORMAT = "%(message)s"
     logging.basicConfig(level=logging.INFO, format=FORMAT, datefmt="[%X]", handlers=[RichHandler(highlighter=BetterReprHighlighter())])
+    
+    # 将所有日志的 handler 设置为 RichHandler
+    for name in logging.root.manager.loggerDict:
+        logging.getLogger(name).handlers = []
+        logging.getLogger(name).addHandler(RichHandler(highlighter=BetterReprHighlighter()))

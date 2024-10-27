@@ -1,5 +1,4 @@
 import simplediffusion.logger
-from modules import shared
 
 simplediffusion.logger.initialize()
 import logging
@@ -89,19 +88,18 @@ def main():
             # shared.sd_model = sd_model
         with Timer("Process"):
             p = StableDiffusionProcessingTxt2Img(
+                # init_images=[img],
                 sd_model=sd_model,
                 prompt="1girl, masterpiece, best quality, light brown background, from side, portrait, green eyes, tsurime, long hair, medium breasts, knees, headdress, string bikini, closed eyes",
                 negative_prompt="nsfw, lowres, (bad), text, error, fewer, extra, missing, worst quality, jpeg artifacts, low quality, watermark, unfinished, displeasing, oldest, early, chromatic aberration, signature, extra digits, artistic error, username, scan, [abstract]",
                 seed=47,
                 outpath_samples="./outputs",
-                # sampler_name="DPM++ 2M SDE",
                 sampler_name="DPM++ 2M",
                 scheduler="Automatic",
-                # init_images=[img],
                 hooks=hooks,
                 width=832,
                 height=1216,
-                cfg_scale=5,
+                cfg_scale=7,
                 steps=20,
             )
             h, w, hr_y, hr_x, has_high_res_fix = calculate_image_dimensions(p)
